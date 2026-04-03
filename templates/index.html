@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>METAR Reader — Plain-English Airport Weather</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a2a4a 0%, #2d5a8e 100%);
+      min-height: 100vh;
+      color: #1e293b;
+      padding: 2rem 1rem;
+    }
+
+    .container {
+      max-width: 720px;
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 2rem;
+      color: white;
+    }
+
+    header h1 {
+      font-size: 2.2rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    header p {
+      margin-top: 0.4rem;
+      opacity: 0.8;
+      font-size: 1rem;
+    }
+
+    .search-card {
+      background: white;
+      border-radius: 16px;
+      padding: 1.8rem;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+      margin-bottom: 1.5rem;
+    }
+
+    .search-row {
+      display: flex;
+      gap: 0.75rem;
+    }
+
+    .search-row input {
+      flex: 1;
+      padding: 0.75rem 1rem;
+      font-size: 1.1rem;
+      font-family: inherit;
+      border: 2px solid #cbd5e1;
+      border-radius: 10px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      font-weight: 600;
+      color: #1e293b;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .search-row input:focus {
+      border-color: #2d5a8e;
+    }
+
+    .search-row button {
+      padding: 0.75rem 1.5rem;
+      background: #2d5a8e;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+      white-space: nowrap;
+    }
+
+    .search-row button:hover { background: #1a3f6a; }
+    .search-row button:active { transform: scale(0.97); }
+
+    .hint {
+      margin-top: 0.6rem;
+      font-size: 0.82rem;
+      color: #94a3b8;
+    }
+
+    .error-box {
+      background: #fef2f2;
+      border: 1px solid #fca5a5;
+      color: #b91c1c;
+      padding: 1rem 1.25rem;
+      border-radius: 10px;
+      margin-bottom: 1.5rem;
+    }
+
+    /* Result card */
+    .result-card {
+      background: white;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+    }
+
+    .result-header {
+      background: linear-gradient(135deg, #1a3f6a, #2d5a8e);
+      color: white;
+      padding: 1.5rem 1.8rem;
+    }
+
+    .result-header .airport-code {
+      font-size: 2.5rem;
+      font-weight: 800;
+      letter-spacing: 4px;
+      line-height: 1;
+    }
+
+    .result-header .report-time {
+      margin-top: 0.3rem;
+      font-size: 0.85rem;
+      opacity: 0.75;
+    }
+
+    .summary-box {
+      background: #f0f7ff;
+      border-bottom: 1px solid #dbeafe;
+      padding: 1.2rem 1.8rem;
+      font-size: 1.15rem;
+      font-weight: 500;
+      color: #1e40af;
+      line-height: 1.5;
+    }
+
+    .details {
+      padding: 1.5rem 1.8rem;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+
+    @media (max-width: 500px) {
+      .details { grid-template-columns: 1fr; }
+    }
+
+    .detail-item {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 0.9rem 1rem;
+    }
+
+    .detail-item.full-width {
+      grid-column: 1 / -1;
+    }
+
+    .detail-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #94a3b8;
+      margin-bottom: 0.3rem;
+    }
+
+    .detail-value {
+      font-size: 0.97rem;
+      color: #1e293b;
+      font-weight: 500;
+      line-height: 1.4;
+    }
+
+    .sky-list {
+      list-style: none;
+      padding: 0;
+    }
+
+    .sky-list li {
+      padding: 0.15rem 0;
+    }
+
+    .sky-list li + li {
+      border-top: 1px solid #e2e8f0;
+      margin-top: 0.3rem;
+      padding-top: 0.3rem;
+    }
+
+    .raw-section {
+      border-top: 1px solid #e2e8f0;
+      padding: 1rem 1.8rem 1.5rem;
+    }
+
+    .raw-section details summary {
+      font-size: 0.82rem;
+      color: #94a3b8;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .raw-section details summary:hover {
+      color: #64748b;
+    }
+
+    .raw-metar {
+      margin-top: 0.6rem;
+      font-family: "SF Mono", "Fira Code", monospace;
+      font-size: 0.82rem;
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      word-break: break-all;
+      color: #475569;
+      line-height: 1.6;
+    }
+
+    .badge-auto {
+      display: inline-block;
+      background: #fef9c3;
+      color: #92400e;
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      letter-spacing: 0.05em;
+      margin-left: 0.5rem;
+      vertical-align: middle;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>METAR Reader</h1>
+      <p>Plain-English airport weather reports</p>
+    </header>
+
+    <div class="search-card">
+      <form method="POST" action="/">
+        <div class="search-row">
+          <input
+            type="text"
+            name="airport"
+            placeholder="KJFK"
+            value="{{ airport }}"
+            maxlength="10"
+            autocomplete="off"
+            spellcheck="false"
+            autofocus
+          >
+          <button type="submit">Get Weather</button>
+        </div>
+        <p class="hint">Enter an ICAO airport code (4 letters, e.g. KLAX, EGLL, KJFK)</p>
+      </form>
+    </div>
+
+    {% if error %}
+    <div class="error-box">{{ error }}</div>
+    {% endif %}
+
+    {% if result %}
+    {% set d = result.decoded %}
+    <div class="result-card">
+      <div class="result-header">
+        <div class="airport-code">
+          {{ d.station }}
+          {% if d.is_auto is defined and d.is_auto %}
+          <span class="badge-auto">AUTO</span>
+          {% endif %}
+        </div>
+        {% if d.time %}
+        <div class="report-time">Report time: {{ d.time }}</div>
+        {% endif %}
+      </div>
+
+      <div class="summary-box">
+        {{ result.summary }}
+      </div>
+
+      <div class="details">
+
+        {% if d.temperature %}
+        <div class="detail-item">
+          <div class="detail-label">Temperature</div>
+          <div class="detail-value">{{ d.temperature }}</div>
+        </div>
+        {% endif %}
+
+        {% if d.dewpoint %}
+        <div class="detail-item">
+          <div class="detail-label">Dew Point</div>
+          <div class="detail-value">{{ d.dewpoint }}</div>
+        </div>
+        {% endif %}
+
+        {% if d.wind %}
+        <div class="detail-item {% if not d.wind_variable %}full-width{% endif %}">
+          <div class="detail-label">Wind</div>
+          <div class="detail-value">{{ d.wind }}</div>
+        </div>
+        {% endif %}
+
+        {% if d.wind_variable %}
+        <div class="detail-item">
+          <div class="detail-label">Wind Direction</div>
+          <div class="detail-value">{{ d.wind_variable }}</div>
+        </div>
+        {% endif %}
+
+        {% if d.visibility %}
+        <div class="detail-item">
+          <div class="detail-label">Visibility</div>
+          <div class="detail-value">{{ d.visibility }}</div>
+        </div>
+        {% endif %}
+
+        {% if d.altimeter %}
+        <div class="detail-item">
+          <div class="detail-label">Altimeter / Pressure</div>
+          <div class="detail-value">{{ d.altimeter }}</div>
+        </div>
+        {% endif %}
+
+        {% if d.weather %}
+        <div class="detail-item full-width">
+          <div class="detail-label">Present Weather</div>
+          <div class="detail-value">{{ d.weather | capitalize }}</div>
+        </div>
+        {% endif %}
+
+        {% if d.sky %}
+        <div class="detail-item full-width">
+          <div class="detail-label">Sky Conditions</div>
+          <div class="detail-value">
+            <ul class="sky-list">
+              {% for layer in d.sky %}
+              <li>{{ layer }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+        </div>
+        {% endif %}
+
+      </div>
+
+      <div class="raw-section">
+        <details>
+          <summary>Show raw METAR</summary>
+          <div class="raw-metar">{{ d.raw }}</div>
+        </details>
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+</body>
+</html>
