@@ -72,6 +72,28 @@ Enter a four-letter ICAO airport code in the search box and press **Get Weather*
 
 > **Tip:** ICAO codes are not the same as the shorter IATA codes used on flight tickets (e.g. LAX, JFK). In the US, most codes start with `K` followed by the three-letter IATA code.
 
+## Testing
+
+The test suite uses `pytest` and covers all parsing logic and Flask routes. No network connection is required — external API calls are mocked.
+
+**Run the tests:**
+
+```bash
+pytest test_app.py -v
+```
+
+**Expected output:** 72 tests passing in under a second.
+
+The suite is organised into four test classes:
+
+| Class | Tests | Covers |
+|---|---|---|
+| `TestDegreesToCompass` | 10 | Cardinal and intercardinal wind direction conversions |
+| `TestParseVisibility` | 11 | All visibility formats: statute miles, fractions, meters, CAVOK, "less than" prefix |
+| `TestDecodeMetar` | 29 | Every METAR field — wind, gusts, sky layers, weather phenomena, temperatures, altimeter, edge cases |
+| `TestGenerateSummary` | 12 | Plain-English summaries for all sky and weather conditions |
+| `TestFlaskRoutes` | 8 | HTTP responses, mocked API calls, error handling, form behaviour |
+
 ## Data Source
 
 Weather data is retrieved in real time from the [Aviation Weather Center API](https://aviationweather.gov/api/data/metar), operated by NOAA. No API key is required.
@@ -81,6 +103,7 @@ Weather data is retrieved in real time from the [Aviation Weather Center API](ht
 ```
 metar-reader/
 ├── app.py              # Flask application and METAR parser
+├── test_app.py         # Pytest unit and integration tests
 ├── requirements.txt    # Python dependencies
 └── templates/
     └── index.html      # Front-end template
